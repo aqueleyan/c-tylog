@@ -60,7 +60,7 @@ namespace Logger
         public void Log(LogLevel level, string message)
         {
             if (level < _minLogLevel) return;
-            try { _logQueue.Add((DateTime.UtcNow, level, message)); } catch {}
+            try { _logQueue.Add((DateTime.UtcNow, level, message)); } catch (Exception ex) { Console.Error.WriteLine($"Erro ao adicionar log na fila: {ex}"); }
         }
 
         public void Debug(string message) => Log(LogLevel.Debug, message);
@@ -92,7 +92,7 @@ namespace Logger
                     var line = $"[{localTime:dd-MM-yyyy - HH:mm:ss}] [{entry.Item2}] {entry.Item3}";
                     WriteMainIfNeeded(mainWriter, localTime);
                     mainWriter.WriteLine(line);
-                    mainWriter.Flush();
+                        mainWriter.Flush();
                     if (entry.Item2 == LogLevel.Error || entry.Item2 == LogLevel.Fatal)
                     {
                         WriteErrorIfNeeded(errorWriter, localTime);
@@ -111,7 +111,10 @@ namespace Logger
             {
                 FlushRemaining();
             }
-            catch {}
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Erro no processamento de logs: {ex}");
+            }
             finally
             {
                 FlushRemaining();
@@ -122,9 +125,6 @@ namespace Logger
         {
             try
             {
-                var mainAlreadyExisted = _mainFileExisted || File.Exists(_mainLogFilePath);
-                var errorAlreadyExisted = _errorFileExisted || File.Exists(_errorLogFilePath);
-                var fatalAlreadyExisted = _fatalFileExisted || File.Exists(_fatalLogFilePath);
                 CreateDir(_mainLogFilePath);
                 CreateDir(_errorLogFilePath);
                 CreateDir(_fatalLogFilePath);
@@ -155,7 +155,10 @@ namespace Logger
                     }
                 }
             }
-            catch {}
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Erro ao finalizar flush dos logs: {ex}");
+            }
         }
 
         private void WriteMainIfNeeded(StreamWriter writer, DateTime localTime)
@@ -212,15 +215,26 @@ namespace Logger
         private void CreateDir(string path)
         {
             var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
         }
 
         public void Dispose()
         {
             _cancellationTokenSource.Cancel();
             _logQueue.CompleteAdding();
-            try { _loggingTask.Wait(); } catch {}
-            finally { _cancellationTokenSource.Dispose(); }
+            try
+            {
+                _loggingTask.Wait();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Erro ao aguardar término da task: {ex}");
+            }
+            finally
+            {
+                _cancellationTokenSource.Dispose();
+            }
         }
     }
 }
